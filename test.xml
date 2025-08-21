@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+<testsuite name="ExampleTestSuite" tests="4" failures="1" errors="1" skipped="1" time="0.005">
+  <testcase classname="com.example.MyTest" name="testSuccess" time="0.001"/>
+  <testcase classname="com.example.MyTest" name="testFailure" time="0.001">
+    <failure message="expected:&lt;true&gt; but was:&lt;false&gt;" type="AssertionError">
+      <![CDATA[java.lang.AssertionError: expected:<true> but was:<false>
+	at com.example.MyTest.testFailure(MyTest.java:10)
+      ]]>
+    </failure>
+  </testcase>
+  <testcase classname="com.example.MyTest" name="testError" time="0.002">
+    <error message="NullPointerException" type="NullPointerException">
+      <![CDATA[java.lang.NullPointerException
+	at com.example.MyTest.testError(MyTest.java:15)
+      ]]>
+    </error>
+  </testcase>
+  <testcase classname="com.example.MyTest" name="testSkipped" time="0.001">
+    <skipped/>
+  </testcase>
+</testsuite>
+</testsuites>
