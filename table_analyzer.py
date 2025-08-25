@@ -33,9 +33,80 @@ class TableStyleAnalyzer:
         if rgb_color is None:
             return None
         try:
-            return f"#{rgb_color:06X}"
-        except (TypeError, ValueError):
+            # Handle RGBColor object
+            if hasattr(rgb_color, '__iter__') and len(rgb_color) == 3:
+                # If it's already a tuple/list of RGB values
+                r, g, b = rgb_color
+                return f"#{r:02X}{g:02X}{b:02X}"
+            elif isinstance(rgb_color, int):
+                # If it's an integer representation
+                return f"#{rgb_color:06X}"
+            else:
+                # If it's an RGBColor object, convert to int first
+                rgb_int = int(rgb_color)
+                return f"#{rgb_int:06X}"
+        except (TypeError, ValueError, AttributeError):
             return str(rgb_color)
+
+    def rgb_color_to_components(self, rgb_color):
+        """Convert RGBColor to individual R, G, B components"""
+        if rgb_color is None:
+            return None, None, None
+        
+        try:
+            # Convert RGBColor to integer
+            if hasattr(rgb_color, '__iter__') and len(rgb_color) == 3:
+                return rgb_color  # Already components
+            
+            # Convert RGBColor object to integer
+            rgb_int = int(rgb_color)
+            r = (rgb_int >> 16) & 0xFF
+            g = (rgb_int >> 8) & 0xFF
+            b = rgb_int & 0xFF
+            return r, g, b
+        except (TypeError, ValueError, AttributeError):
+            return None, None, None
+
+    def get_font_info(self, run):
+        """Extract detailed font information from a run"""
+        font_info = {}
+        
+        # Font name
+        if run.font.name:
+            font_info['name'] = run.font.name
+        else:
+            # Try to get the default font from the document
+            font_info['name'] = "Default (typically Calibri)"
+        
+        # Font size
+        if run.font.size:
+            font_info['size_points'] = self.inches_to_points(run.font.size)
+            font_info['size_inches'] = run.font.size
+        else:
+            font_info['size_points'] = "Default (typically 11pt)"
+            font_info['size_inches'] = None
+        
+        # Font color
+        if run.font.color.rgb:
+            font_info['color'] = self.rgb_to_hex(run.font.color.rgb)
+            font_info['color_components'] = self.rgb_color_to_components(run.font.color.rgb)
+        else:
+            font_info['color'] = "Default (typically black)"
+            font_info['color_components'] = (None, None, None)
+        
+        # Font styling
+        font_info['bold'] = run.bold if run.bold is not None else False
+        font_info['italic'] = run.italic if run.italic is not None else False
+        font_info['underline'] = run.underline if run.underline is not None else False
+        
+        # Additional font properties
+        font_info['small_caps'] = run.font.small_caps if run.font.small_caps is not None else False
+        font_info['all_caps'] = run.font.all_caps if run.font.all_caps is not None else False
+        font_info['strike'] = run.font.strike if run.font.strike is not None else False
+        font_info['subscript'] = run.font.subscript if run.font.subscript is not None else False
+        font_info['superscript'] = run.font.superscript if run.font.superscript is not None else False
+        
+        return font_info
 
     def get_cell_background_color(self, cell):
         """Extract background color from cell"""
@@ -83,14 +154,10 @@ class TableStyleAnalyzer:
         
         for run in paragraph.runs:
             if run.text.strip():  # Only analyze runs with actual text
+                font_info = self.get_font_info(run)
                 run_format = {
                     'text': run.text,
-                    'bold': run.bold,
-                    'italic': run.italic,
-                    'underline': run.underline,
-                    'font_name': run.font.name,
-                    'font_size': self.inches_to_points(run.font.size) if run.font.size else None,
-                    'font_color': self.rgb_to_hex(run.font.color.rgb) if run.font.color.rgb else None
+                    'font': font_info
                 }
                 formatting['runs'].append(run_format)
         
@@ -142,11 +209,41 @@ class TableStyleAnalyzer:
         
         return merged_info
 
+    def print_font_details(self, font_info, indent="      "):
+        """Print detailed font information in a formatted way"""
+        print(f"{indent}Font: {font_info['name']}")
+        print(f"{indent}Font size: {font_info['size_points']} points")
+        print(f"{indent}Font color: {font_info['color']}")
+        
+        # Style properties
+        styles = []
+        if font_info['bold']:
+            styles.append("Bold")
+        if font_info['italic']:
+            styles.append("Italic")
+        if font_info['underline']:
+            styles.append("Underlined")
+        if font_info['small_caps']:
+            styles.append("Small Caps")
+        if font_info['all_caps']:
+            styles.append("All Caps")
+        if font_info['strike']:
+            styles.append("Strikethrough")
+        if font_info['subscript']:
+            styles.append("Subscript")
+        if font_info['superscript']:
+            styles.append("Superscript")
+        
+        if styles:
+            print(f"{indent}Font styles: {', '.join(styles)}")
+        else:
+            print(f"{indent}Font styles: None")
+
     def analyze_table(self, table, table_index):
         """Analyze a single table and return detailed style information"""
-        print(f"\n{'='*80}")
+        print(f"\n{'='*90}")
         print(f"TABLE {table_index + 1} ANALYSIS")
-        print(f"{'='*80}")
+        print(f"{'='*90}")
         
         # Basic table information
         print(f"Dimensions: {len(table.rows)} rows × {len(table.columns)} columns")
@@ -167,7 +264,7 @@ class TableStyleAnalyzer:
         
         # Analyze each cell
         print(f"\nCELL-BY-CELL ANALYSIS:")
-        print("-" * 80)
+        print("-" * 90)
         
         for row_idx, row in enumerate(table.rows):
             print(f"\nROW {row_idx}:")
@@ -201,7 +298,8 @@ class TableStyleAnalyzer:
                 if borders:
                     print(f"    Borders:")
                     for border_type, border_info in borders.items():
-                        print(f"      {border_type}: {border_info['style']}, size: {border_info['size']}, color: #{border_info['color']}")
+                        color = f"#{border_info['color']}" if border_info['color'] != 'auto' else border_info['color']
+                        print(f"      {border_type}: {border_info['style']}, size: {border_info['size']}, color: {color}")
                 
                 # Text formatting for each paragraph
                 for para_idx, paragraph in enumerate(cell.paragraphs):
@@ -214,29 +312,25 @@ class TableStyleAnalyzer:
                         for run_idx, run_format in enumerate(formatting['runs']):
                             print(f"      Run {run_idx}:")
                             print(f"        Text: '{run_format['text']}'")
-                            if run_format['bold']:
-                                print(f"        Bold: {run_format['bold']}")
-                            if run_format['italic']:
-                                print(f"        Italic: {run_format['italic']}")
-                            if run_format['underline']:
-                                print(f"        Underline: {run_format['underline']}")
-                            if run_format['font_name']:
-                                print(f"        Font: {run_format['font_name']}")
-                            if run_format['font_size']:
-                                print(f"        Font size: {run_format['font_size']} points")
-                            if run_format['font_color']:
-                                print(f"        Font color: {run_format['font_color']}")
+                            self.print_font_details(run_format['font'], "        ")
 
     def generate_replication_code(self, table, table_index):
         """Generate Python code snippet to replicate the table style"""
-        print(f"\n{'='*80}")
+        print(f"\n{'='*90}")
         print(f"PYTHON CODE TO REPLICATE TABLE {table_index + 1}")
-        print(f"{'='*80}")
+        print(f"{'='*90}")
         
         rows = len(table.rows)
         cols = len(table.columns)
         
         code = f"""
+# Import required modules
+from docx import Document
+from docx.shared import Inches, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml.shared import OxmlElement, qn
+
 # Create table with {rows} rows and {cols} columns
 table = doc.add_table(rows={rows}, cols={cols})
 
@@ -272,31 +366,56 @@ cell_properties.append(shading)
                     # Text formatting
                     if cell.paragraphs:
                         paragraph = cell.paragraphs[0]
+                        formatting_code = []
+                        
+                        if paragraph.alignment is not None:
+                            alignment_name = self.alignment_names.get(paragraph.alignment, 'LEFT')
+                            formatting_code.append(f"paragraph = cell.paragraphs[0]")
+                            formatting_code.append(f"paragraph.alignment = WD_ALIGN_PARAGRAPH.{alignment_name}")
+                        
                         if paragraph.runs:
                             run = paragraph.runs[0]
+                            font_info = self.get_font_info(run)
                             
-                            formatting_code = []
-                            if paragraph.alignment is not None:
-                                alignment_name = self.alignment_names.get(paragraph.alignment, 'LEFT')
-                                formatting_code.append(f"paragraph = cell.paragraphs[0]")
-                                formatting_code.append(f"paragraph.alignment = WD_ALIGN_PARAGRAPH.{alignment_name}")
+                            run_code = ["run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()"]
                             
-                            if run.bold or run.italic or run.font.color.rgb:
-                                formatting_code.append("run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()")
-                                
-                                if run.bold:
-                                    formatting_code.append("run.font.bold = True")
-                                if run.italic:
-                                    formatting_code.append("run.font.italic = True")
-                                if run.font.color.rgb:
-                                    rgb = run.font.color.rgb
-                                    formatting_code.append(f"run.font.color.rgb = RGBColor({rgb >> 16}, {(rgb >> 8) & 0xFF}, {rgb & 0xFF})")
-                                if run.font.size:
-                                    size_points = self.inches_to_points(run.font.size)
-                                    formatting_code.append(f"run.font.size = Inches({run.font.size})")
+                            # Font properties
+                            if font_info['name'] and font_info['name'] != "Default (typically Calibri)":
+                                run_code.append(f"run.font.name = '{font_info['name']}'")
                             
-                            if formatting_code:
-                                code += "\n" + "\n".join(formatting_code) + "\n"
+                            if font_info['size_inches']:
+                                run_code.append(f"run.font.size = Inches({font_info['size_inches']})")
+                            
+                            # Handle font color with proper RGB component extraction
+                            if (font_info['color'] and 
+                                font_info['color'] != "Default (typically black)" and 
+                                font_info['color_components'][0] is not None):
+                                r, g, b = font_info['color_components']
+                                run_code.append(f"run.font.color.rgb = RGBColor({r}, {g}, {b})")
+                            
+                            # Style properties
+                            if font_info['bold']:
+                                run_code.append("run.font.bold = True")
+                            if font_info['italic']:
+                                run_code.append("run.font.italic = True")
+                            if font_info['underline']:
+                                run_code.append("run.font.underline = True")
+                            if font_info['small_caps']:
+                                run_code.append("run.font.small_caps = True")
+                            if font_info['all_caps']:
+                                run_code.append("run.font.all_caps = True")
+                            if font_info['strike']:
+                                run_code.append("run.font.strike = True")
+                            if font_info['subscript']:
+                                run_code.append("run.font.subscript = True")
+                            if font_info['superscript']:
+                                run_code.append("run.font.superscript = True")
+                            
+                            if len(run_code) > 1:  # More than just the run creation line
+                                formatting_code.extend(run_code)
+                        
+                        if formatting_code:
+                            code += "\n" + "\n".join(formatting_code) + "\n"
         
         # Add merged cells code
         merged_cells = self.check_merged_cells(table)
@@ -333,9 +452,9 @@ cell_properties.append(shading)
                 if i < len(doc.tables) - 1:
                     input("\nPress Enter to continue to the next table...")
             
-            print(f"\n{'='*80}")
+            print(f"\n{'='*90}")
             print("ANALYSIS COMPLETE")
-            print(f"{'='*80}")
+            print(f"{'='*90}")
             
         except Exception as e:
             print(f"Error analyzing document: {str(e)}")
